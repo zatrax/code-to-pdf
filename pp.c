@@ -264,10 +264,10 @@ void PrintRange(Range r, int level)
     int rcnt = 0;
     Range rstack[100];
     int i = 0;
-    int subls = 0;
+
     char buf[1000];
-    int remove = 0;
-    char *p;
+
+
     int skip = 0;
     char *pbeg, *pend;
     int nleadingspaces;
@@ -339,7 +339,7 @@ int main(int arg, char *argv[])
 
     while (fgets(buf, 999, stdin))
     {
-        lines[n].buf = (char*) malloc(strlen(buf) + 1);
+        lines[n].buf = (char*)malloc(strlen(buf) + 1);
         strcpy(lines[n].buf, buf);
         n++;
     }
