@@ -1,5 +1,8 @@
+CFLAGS=-Wunused
 all: code2pdf pp
 code2pdf: code2pdf.c
-	gcc  -o $@ $< -lhpdf -lm -lz
+	gcc $(CFLAGS) -o $@ $< -lhpdf -lm -lz
 pp: pp.c
-	gcc -o $@ $<
+	gcc $(CFLAGS) -o $@ $<
+clean:
+	rm code2pdf pp

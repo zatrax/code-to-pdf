@@ -6,7 +6,9 @@
 
 #define MAXSTRING 1000
 #define LINES_PER_PAGE 64
-#define MAX_FONT_SIZE_FOR_CODE 10
+#define CODE_FONT_SIZE 10
+#define EVENPAGE(n) (!((n) & 1))
+
 #ifndef min
 #define min(a,b)  ((a) > (b) ? (b) : (a))
 #endif
@@ -35,19 +37,15 @@ const char section_font[MAXSTRING] = "Courier-Bold";
 const char default_font_name[MAXSTRING] = "Helvetica";
 LINE_INFO lines[LINES_PER_PAGE];
 
-#define GETWIDTH(r) ((r)->right - (r)->left)
-#define GETHEIGHT(r) ((r)->bottom - (r)->top)
-
 RECT page_margin_odd = {50, 80, 25, 50};
 RECT page_margin_even = {25, 80, 50, 50};
 RECT page_margin_kindle = {30, 80, 30, 50};
 RECT page_margin = {50, 50, 25, 25};
 RECT page_padding = {10, 10, 10, 10};
 SIZE page_size;
-
 jmp_buf env;
 
-void error_handler (HPDF_STATUS error_no, HPDF_STATUS detail_no, void *user_data)
+void error_handler(HPDF_STATUS error_no, HPDF_STATUS detail_no, void *user_data)
 {
     printf ("ERROR: error_no=%04X, detail_no=%u\n",
             (HPDF_UINT)error_no,
@@ -76,60 +74,39 @@ void print_page_header(HPDF_Doc pdf, HPDF_Page page, const char *header)
 void print_page_content(HPDF_Doc pdf, HPDF_Page page, LINE_INFO lines[], int n)
 {
     HPDF_Font typewriter_font;
-    HPDF_REAL tw;
-    HPDF_REAL width;
-    RECT    rcBox;
-    int x, y;
-    int font_size = 10;
-    int i = 1;
+    RECT rcBox;
+    int i, x, y;
+    int font_size = CODE_FONT_SIZE;
     char buf[MAXSTRING];
     int actual_height = 0;
     int align;
     int line_num;
-
-    if (n <= 0 || n > LINES_PER_PAGE)
-    {
-        printf("Error: %d lines\n", n);
-        return;
-    }
 
     rcBox.left = page_margin.left + page_padding.left;
     rcBox.right = page_size.cx - page_margin.right - page_padding.right;
     rcBox.top = page_size.cy - page_margin.top - page_padding.top;
     rcBox.bottom = page_margin.bottom + page_padding.bottom;
 
-    font_size = (rcBox.top - rcBox.bottom) / n;
-    font_size = min(MAX_FONT_SIZE_FOR_CODE, font_size);
-
     actual_height = LINES_PER_PAGE * font_size;
     align = (rcBox.top - rcBox.bottom - actual_height) / 2;
     rcBox.top -= align;
     rcBox.bottom += align;
-
     typewriter_font = HPDF_GetFont (pdf, "Courier", NULL);
     HPDF_Page_SetFontAndSize (page, typewriter_font, font_size);
-
-    y = rcBox.top - font_size;
+    HPDF_Page_BeginText(page);
     x = rcBox.left;
-
-    HPDF_Page_BeginText (page);
-    HPDF_Page_MoveTextPos (page, x, y);
-
+    y = rcBox.top - font_size;
+    HPDF_Page_MoveTextPos(page, x, y);
     line_num = lines[0].line_num;
     for (i = 0; i < LINES_PER_PAGE; i++, line_num++)
     {
         if (i < n)
-        {
             sprintf(buf, "%04d %s", line_num, lines[i].line);
-        }
         else
-        {
             sprintf(buf, "%04d", line_num);
-        }
-        HPDF_Page_ShowText (page, buf);
-        HPDF_Page_MoveTextPos (page, 0, -font_size);
+        HPDF_Page_ShowText(page, buf);
+        HPDF_Page_MoveTextPos(page, 0, -font_size);
     }
-
     HPDF_Page_EndText (page);
 }
 
@@ -138,17 +115,17 @@ void print_page_footer(HPDF_Doc pdf, HPDF_Page page, const char *footer)
     HPDF_Font header_font;
     HPDF_REAL tw;
     HPDF_REAL width;
-    header_font = HPDF_GetFont (pdf, default_font_name, NULL);
-    HPDF_Page_SetFontAndSize (page, header_font, 12);
-    tw = HPDF_Page_TextWidth (page, footer);
-    HPDF_Page_BeginText (page);
-
+    
+    header_font = HPDF_GetFont(pdf, default_font_name, NULL);
+    HPDF_Page_SetFontAndSize(page, header_font, 12);
+    tw = HPDF_Page_TextWidth(page, footer);
     width = page_size.cx - page_margin.left - page_margin.right,
-    HPDF_Page_TextOut (page, 
-                       page_margin.left + (width - tw) / 2, 
-                       page_margin.bottom - 12,
-                       footer);
-    HPDF_Page_EndText (page);
+    HPDF_Page_BeginText(page);
+    HPDF_Page_TextOut(page, 
+                      page_margin.left + (width - tw) / 2, 
+                      page_margin.bottom - 12,
+                      footer);
+    HPDF_Page_EndText(page);
 }
 
 int main (int argc, char **argv)
@@ -156,7 +133,6 @@ int main (int argc, char **argv)
     HPDF_Doc  pdf;
     HPDF_Page page;
     HPDF_Font def_font;
-    HPDF_REAL tw;
     HPDF_REAL height;
     HPDF_REAL width;
     HPDF_UINT i;
@@ -181,18 +157,15 @@ int main (int argc, char **argv)
             page_margin_even = page_margin_kindle;
         }
     }
-    
     pdf = HPDF_New (error_handler, NULL);
     if (!pdf) {
         printf ("error: cannot create PdfDoc object\n");
         return 1;
     }
-
     if (setjmp(env)) {
         HPDF_Free (pdf);
         return 1;
     }
-
     while (!done)
     {
         int n = 0;
@@ -242,21 +215,18 @@ int main (int argc, char **argv)
         height = HPDF_Page_GetHeight (page);
         width = HPDF_Page_GetWidth (page);
 
-        page_margin = (page_num % 2 == 0 ? page_margin_even : page_margin_odd);
-
+        page_margin = EVENPAGE(page_num) ? page_margin_even : page_margin_odd;
         page_size.cx = (int)width;
         page_size.cy = (int)height;
 
         def_font = HPDF_GetFont (pdf, default_font_name, NULL);
         HPDF_Page_SetFontAndSize (page, def_font, 16);
-
         print_page_header(pdf, page, page_title);
         print_page_content(pdf, page, lines, n);
         sprintf(page_number, "%d", page_num);
         print_page_footer(pdf, page, page_number);
         page_num++;
     }
-
     if (page_num > 1)
     {
         HPDF_SaveToFile (pdf, fname);
@@ -266,10 +236,7 @@ int main (int argc, char **argv)
     {
         printf("No output\n");
     }
-
     /* clean up */
     HPDF_Free (pdf);
-
     return 0;
 }
-
