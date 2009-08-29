@@ -1,25 +1,8 @@
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <setjmp.h>
 #include "hpdf.h"
-
-jmp_buf env;
-
-#ifdef HPDF_DLL
-void  __stdcall
-#else
-void
-#endif
-error_handler (HPDF_STATUS   error_no,
-               HPDF_STATUS   detail_no,
-               void         *user_data)
-{
-    printf ("ERROR: error_no=%04X, detail_no=%u\n", (HPDF_UINT)error_no,
-                (HPDF_UINT)detail_no);
-    longjmp(env, 1);
-}
 
 #define MAXSTRING 1000
 #define LINES_PER_PAGE 64
@@ -27,11 +10,7 @@ error_handler (HPDF_STATUS   error_no,
 #ifndef min
 #define min(a,b)  ((a) > (b) ? (b) : (a))
 #endif
-char fname[256] = "code.pdf"; /* default output file */
-char page_title[MAXSTRING] = "Happy Code Reading";
-const char code_font[MAXSTRING] = "Courier";
-const char section_font[MAXSTRING] = "Courier-Bold";
-const char default_font_name[MAXSTRING] = "Helvetica";
+
 typedef struct {
     int left;
     int top;
@@ -40,44 +19,43 @@ typedef struct {
 } RECT;
 
 typedef struct {
-    int x;
-    int y;
-} POINT;
-
-typedef struct {
     int cx;
     int cy;
 } SIZE;
 
-enum RefType
-{
-    RT_NIL,
-    RT_LEFT_BRACKET,
-    RT_RIGHT_BRACKET,
-    RT_LINE
-};
-
 typedef struct {
     char  line[MAXSTRING];
     int   line_num;
-    int   split;
-    int   ref;
-    int   ref_data;
-} LineInfo;
+} LINE_INFO;
 
-LineInfo lines[LINES_PER_PAGE];
+char fname[256] = "code.pdf"; /* default output file */
+char page_title[MAXSTRING] = "Happy Code Reading";
+const char code_font[MAXSTRING] = "Courier";
+const char section_font[MAXSTRING] = "Courier-Bold";
+const char default_font_name[MAXSTRING] = "Helvetica";
+LINE_INFO lines[LINES_PER_PAGE];
 
 #define GETWIDTH(r) ((r)->right - (r)->left)
 #define GETHEIGHT(r) ((r)->bottom - (r)->top)
 
 RECT page_margin_odd = {50, 80, 25, 50};
 RECT page_margin_even = {25, 80, 50, 50};
-
+RECT page_margin_kindle = {30, 80, 30, 50};
 RECT page_margin = {50, 50, 25, 25};
 RECT page_padding = {10, 10, 10, 10};
 SIZE page_size;
 
-void PrintPageHeader(HPDF_Doc pdf, HPDF_Page page, const char *header)
+jmp_buf env;
+
+void error_handler (HPDF_STATUS error_no, HPDF_STATUS detail_no, void *user_data)
+{
+    printf ("ERROR: error_no=%04X, detail_no=%u\n",
+            (HPDF_UINT)error_no,
+            (HPDF_UINT)detail_no);
+    longjmp(env, 1);
+}
+
+void print_page_header(HPDF_Doc pdf, HPDF_Page page, const char *header)
 {
     HPDF_Font header_font;
     HPDF_REAL tw;
@@ -95,7 +73,7 @@ void PrintPageHeader(HPDF_Doc pdf, HPDF_Page page, const char *header)
     HPDF_Page_EndText (page);
 }
 
-void PrintPageContent(HPDF_Doc pdf, HPDF_Page page, LineInfo lines[], int n)
+void print_page_content(HPDF_Doc pdf, HPDF_Page page, LINE_INFO lines[], int n)
 {
     HPDF_Font typewriter_font;
     HPDF_REAL tw;
@@ -155,7 +133,7 @@ void PrintPageContent(HPDF_Doc pdf, HPDF_Page page, LineInfo lines[], int n)
     HPDF_Page_EndText (page);
 }
 
-void PrintPageFooter(HPDF_Doc pdf, HPDF_Page page, const char *footer)
+void print_page_footer(HPDF_Doc pdf, HPDF_Page page, const char *footer)
 {
     HPDF_Font header_font;
     HPDF_REAL tw;
@@ -187,6 +165,23 @@ int main (int argc, char **argv)
     char page_number[100];
     int line_num = 1;
 
+    for (i = 1; i < argc; i++)
+    {
+        if (strcmp(argv[i], "-t") == 0)
+        {
+            strcpy(page_title, argv[i+1]);
+        }
+        else if (strcmp(argv[i], "-o") == 0)
+        {
+            strcpy(fname, argv[i+1]);
+        }
+        else if (strcmp(argv[i], "-k") == 0)
+        {
+            page_margin_odd = page_margin_kindle;
+            page_margin_even = page_margin_kindle;
+        }
+    }
+    
     pdf = HPDF_New (error_handler, NULL);
     if (!pdf) {
         printf ("error: cannot create PdfDoc object\n");
@@ -229,22 +224,21 @@ int main (int argc, char **argv)
             n++;
         }
 
+        /* If no more input in future, this is the last page,
+         * flag as done.
+         */
         if (p == NULL)
-        {
-            // We have seen the end of input
             done = 1;
-        }
 
+        /* If no lines are read, we are done. */
         if (n == 0)
-        {
-            // No lines read, job done
             break;
-        }
 
         /* Add a new page object. */
         page = HPDF_AddPage (pdf);
         HPDF_Page_SetSize (page, HPDF_PAGE_SIZE_A4, HPDF_PAGE_PORTRAIT); 
-
+        HPDF_Page_SetRGBFill(page, 0, 0, 0);
+        
         height = HPDF_Page_GetHeight (page);
         width = HPDF_Page_GetWidth (page);
 
@@ -256,13 +250,22 @@ int main (int argc, char **argv)
         def_font = HPDF_GetFont (pdf, default_font_name, NULL);
         HPDF_Page_SetFontAndSize (page, def_font, 16);
 
-        PrintPageHeader(pdf, page, page_title);
-        PrintPageContent(pdf, page, lines, n);
+        print_page_header(pdf, page, page_title);
+        print_page_content(pdf, page, lines, n);
         sprintf(page_number, "%d", page_num);
-        PrintPageFooter(pdf, page, page_number);
+        print_page_footer(pdf, page, page_number);
         page_num++;
     }
-    HPDF_SaveToFile (pdf, fname);
+
+    if (page_num > 1)
+    {
+        HPDF_SaveToFile (pdf, fname);
+        printf("Output written to %s\n", fname);
+    }
+    else
+    {
+        printf("No output\n");
+    }
 
     /* clean up */
     HPDF_Free (pdf);
