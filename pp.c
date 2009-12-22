@@ -301,8 +301,9 @@ void PrintRange(Range r, int level)
         else if (level == 0 && lines[i].buf[0] == '}')
         {
             print(lines[i].buf);
-            print("/* ----------------------------------- */\n\n");
-
+            #if 0
+           print("/* ----------------------------------- */\n\n");
+           #endif
             for (j = 0; j < rcnt; j++)
                 PrintRange(rstack[j], level + 1);
 
@@ -324,23 +325,48 @@ void PrintRange(Range r, int level)
     {
         sprintf(buf, "} %s", pend);
         print(buf);
-        print("/* ----------------------------------- */\n\n");
+//        print("/* ----------------------------------- */\n\n");
     }
 
     for (j = 0; j < rcnt; j++)
         PrintRange(rstack[j], level + 1);
 }
 
-int main(int arg, char *argv[])
+int tabwidth = 8;
+
+int main(int argc, char *argv[])
 {
     char buf[1000];
-    int n = 0;
+    int i, n = 0;
     Range r;
 
+    for (i = 1; i < argc; i++)
+    {
+        if (strcmp(argv[i], "-t") == 0)
+        {
+            i++;
+            tabwidth = atoi(argv[i]);
+        }
+    }
+    
     while (fgets(buf, 999, stdin))
     {
-        lines[n].buf = (char*)malloc(strlen(buf) + 1);
-        strcpy(lines[n].buf, buf);
+        int j = 0;
+        lines[n].buf = (char*)malloc(strlen(buf) + 100);
+        i = 0;
+        do 
+        {
+            if (buf[i] == '\t')
+            {
+                int k = 0;
+                for (; k < tabwidth; k++)
+                    lines[n].buf[j++] = ' ';
+            }
+            else
+            {
+                lines[n].buf[j++] = buf[i];
+            }
+        } while (buf[i++] != 0);
         n++;
     }
     r.beg = 0;

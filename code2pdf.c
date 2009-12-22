@@ -78,19 +78,25 @@ void print_page_content(HPDF_Doc pdf, HPDF_Page page, LINE_INFO lines[], int n)
     int i, x, y;
     int font_size = CODE_FONT_SIZE;
     char buf[MAXSTRING];
-    int actual_height = 0;
+    int content_height;
     int align;
     int line_num;
 
+    /* rcBox is the bounding box of content area
+     * get rid of the margin and padding */
     rcBox.left = page_margin.left + page_padding.left;
     rcBox.right = page_size.cx - page_margin.right - page_padding.right;
     rcBox.top = page_size.cy - page_margin.top - page_padding.top;
     rcBox.bottom = page_margin.bottom + page_padding.bottom;
 
-    actual_height = LINES_PER_PAGE * font_size;
-    align = (rcBox.top - rcBox.bottom - actual_height) / 2;
+
+    /* Try to position rcBox at the center of content area
+     * If align turns out to be negative, then the rcBox is enlarged */
+    content_height = LINES_PER_PAGE * font_size;
+    align = (rcBox.top - rcBox.bottom - content_height) / 2;
     rcBox.top -= align;
     rcBox.bottom += align;
+    
     typewriter_font = HPDF_GetFont (pdf, "Courier", NULL);
     HPDF_Page_SetFontAndSize (page, typewriter_font, font_size);
     HPDF_Page_BeginText(page);
@@ -138,7 +144,7 @@ int main (int argc, char **argv)
     HPDF_UINT i;
     int page_num = 1;
     int done = 0;
-    char page_number[100];
+    char page_number[MAXSTRING];
     int line_num = 1;
 
     for (i = 1; i < argc; i++)
