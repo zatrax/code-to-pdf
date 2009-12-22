@@ -1,11 +1,39 @@
-#include <stdlib.h>
+/*******************************************************************************
+
+                    CODE2PDF - Code Printing Helper
+
+                             Chaoji Li
+                            Oct 3, 2009
+
+For me, good codes are those when you print them out you think they worth the 
+paper and ink. Our ancestor has used much of paper in their programming,
+like punch card, paper tape. It is quite a waste. They even use paper 
+for terminal listing. "dir/ls". Think of that.
+
+Find some well written code and make comments on them. 
+There are two options:
+   - 80x64 on A4 paper portrait. This is very common in code of old era.
+     slim and well planned.
+   - 120x50 on A4 paper landscape. Code get fatter nowadays. Especially for c# or java
+
+Stamp random quotations on the header of a sheet. Quotes from old programmers.
+Or one line joke. 
+
+Printing on paper enables you to make comments by pen.  Code reading is a very
+personal thing.  Use pen make me feel good. You can put some illustrations 
+inside the paper to describe something behind the codes. Put line profiling 
+results or memory usages or sample output or callstack to help understand
+the behaviors.
+ 
+*******************************************************************************/
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <setjmp.h>
 #include "hpdf.h"
 
 #define MAXSTRING 1000
-#define LINES_PER_PAGE 64
+
 #define CODE_FONT_SIZE 10
 #define EVENPAGE(n) (!((n) & 1))
 
@@ -35,21 +63,26 @@ char page_title[MAXSTRING] = "Happy Code Reading";
 const char code_font[MAXSTRING] = "Courier";
 const char section_font[MAXSTRING] = "Courier-Bold";
 const char default_font_name[MAXSTRING] = "Helvetica";
-LINE_INFO lines[LINES_PER_PAGE];
-
+LINE_INFO lines[100];
+int  no_line_number = 0;
+int  use_landscape = 0;
 RECT page_margin_odd = {50, 80, 25, 50};
 RECT page_margin_even = {25, 80, 50, 50};
+RECT page_margin_odd_landscape = {50, 50, 25, 30};
+RECT page_margin_even_landscape = {25, 50, 50, 30};
 RECT page_margin_kindle = {30, 80, 30, 50};
 RECT page_margin = {50, 50, 25, 25};
 RECT page_padding = {10, 10, 10, 10};
 SIZE page_size;
 jmp_buf env;
+int  LINES_PER_PAGE = 64;
 
 void error_handler(HPDF_STATUS error_no, HPDF_STATUS detail_no, void *user_data)
 {
-    printf ("ERROR: error_no=%04X, detail_no=%u\n",
-            (HPDF_UINT)error_no,
-            (HPDF_UINT)detail_no);
+    printf ("Internal error: error_no=%04X, detail_no=%u\n",
+            (HPDF_UINT)error_no,(HPDF_UINT)detail_no);
+    printf("Please make sure file %s is writable. If it is opened by\n"
+           "other applications, please close it and try again.\n", fname);
     longjmp(env, 1);
 }
 
@@ -106,10 +139,14 @@ void print_page_content(HPDF_Doc pdf, HPDF_Page page, LINE_INFO lines[], int n)
     line_num = lines[0].line_num;
     for (i = 0; i < LINES_PER_PAGE; i++, line_num++)
     {
-        if (i < n)
-            sprintf(buf, "%04d %s", line_num, lines[i].line);
+        if (no_line_number)
+        {
+            sprintf(buf, "  %s", i < n ? lines[i].line : "");
+        }
         else
-            sprintf(buf, "%04d", line_num);
+        {
+            sprintf(buf, "%04d %s", line_num, i < n ? lines[i].line : "");
+        }
         HPDF_Page_ShowText(page, buf);
         HPDF_Page_MoveTextPos(page, 0, -font_size);
     }
@@ -134,6 +171,19 @@ void print_page_footer(HPDF_Doc pdf, HPDF_Page page, const char *footer)
     HPDF_Page_EndText(page);
 }
 
+void usage()
+{
+    printf("Usage: code2pdf <filename>\n"
+           "  -            Accepts text from stdin.\n"
+           "  -t  <title>  header string\n"
+           "  -o  <output> output file name, default code.pdf\n"
+           "  -l           landscale, 120x50\n"
+           "  -k           for kindle\n"
+           "  -n           no line number\n"
+           "  -h           help\n");
+    exit(-1);
+}
+
 int main (int argc, char **argv)
 {
     HPDF_Doc  pdf;
@@ -146,7 +196,7 @@ int main (int argc, char **argv)
     int done = 0;
     char page_number[MAXSTRING];
     int line_num = 1;
-
+    FILE *input_file = NULL;
     for (i = 1; i < argc; i++)
     {
         if (strcmp(argv[i], "-t") == 0)
@@ -162,7 +212,37 @@ int main (int argc, char **argv)
             page_margin_odd = page_margin_kindle;
             page_margin_even = page_margin_kindle;
         }
+        else if (strcmp(argv[i], "-n") == 0)
+        {
+            no_line_number = 1;
+        }
+        else if (strcmp(argv[i], "-h")==0)
+        {
+            usage();
+        }
+        else if (strcmp(argv[i], "-l") == 0)
+        {
+            use_landscape = 1;
+            page_margin_odd = page_margin_odd_landscape;
+            page_margin_even = page_margin_even_landscape;
+            LINES_PER_PAGE=50;
+        }
+        else if (strcmp(argv[i], "-")==0)
+        {
+            input_file = stdin;
+        }
+        else
+        {
+            input_file = fopen(argv[i], "r");
+        }
     }
+
+    if (input_file == NULL)
+    {
+        printf("error: no input specified\n");
+        usage();
+    }
+
     pdf = HPDF_New (error_handler, NULL);
     if (!pdf) {
         printf ("error: cannot create PdfDoc object\n");
@@ -178,7 +258,7 @@ int main (int argc, char **argv)
         char buf[1000];
         char *p;
 
-        while ((p = fgets(buf, 999, stdin)) && n < LINES_PER_PAGE)
+        while ((p = fgets(buf, 999, input_file)) && n < LINES_PER_PAGE)
         {
             if (buf[0] == '@')
             {
@@ -215,7 +295,7 @@ int main (int argc, char **argv)
 
         /* Add a new page object. */
         page = HPDF_AddPage (pdf);
-        HPDF_Page_SetSize (page, HPDF_PAGE_SIZE_A4, HPDF_PAGE_PORTRAIT); 
+        HPDF_Page_SetSize (page, HPDF_PAGE_SIZE_A4, use_landscape?HPDF_PAGE_LANDSCAPE:HPDF_PAGE_PORTRAIT); 
         HPDF_Page_SetRGBFill(page, 0, 0, 0);
         
         height = HPDF_Page_GetHeight (page);
@@ -242,7 +322,12 @@ int main (int argc, char **argv)
     {
         printf("No output\n");
     }
+    
+    if (input_file != stdin && input_file != NULL)
+        fclose(input_file);
+
     /* clean up */
     HPDF_Free (pdf);
     return 0;
 }
+/************************************* END ************************************/
