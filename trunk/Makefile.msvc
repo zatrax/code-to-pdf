@@ -2,7 +2,7 @@ CC=cl
 
 CFLAGS=-MT -nologo -O2 -Iinclude -Iwin32\include -D__WIN32__
 CFLAGS_EXE=-Fe
-LDFLAGS=libpng.lib zlib.lib libhpdf.lib
+LDFLAGS=win32\lib\libpng.lib win32\lib\zlib.lib win32\lib\libhpdf.lib
 all: code2pdf pp
 code2pdf: code2pdf.c
 	$(CC) $(CFLAGS_EXE)$@ $(CFLAGS) code2pdf.c $(LDFLAGS)
