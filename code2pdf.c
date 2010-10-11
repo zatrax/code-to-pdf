@@ -201,11 +201,11 @@ int main (int argc, char **argv)
     {
         if (strcmp(argv[i], "-t") == 0)
         {
-            strcpy(page_title, argv[i+1]);
+            strcpy(page_title, argv[++i]);
         }
         else if (strcmp(argv[i], "-o") == 0)
         {
-            strcpy(fname, argv[i+1]);
+            strcpy(fname, argv[++i]);
         }
         else if (strcmp(argv[i], "-k") == 0)
         {
